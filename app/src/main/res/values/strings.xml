@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">InboundZoomingAndDraggingIncanvas</string>
+    <string name="txt_graphics_rotation">Graphics_Rotation</string>
+    <string name="txt_graphics_rotation1">Graphics_Rotation</string>
+</resources>
