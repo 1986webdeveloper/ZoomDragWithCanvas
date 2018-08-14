@@ -5,8 +5,6 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.PorterDuff;
-import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
 import android.text.Layout;
 import android.text.StaticLayout;
@@ -21,38 +19,42 @@ public class DemoView extends View implements ScaleGestureDetector.OnScaleGestur
 
     private static final String TAG = DemoView.class.getSimpleName();
     private static final int INVALID_POINTER_ID = -1;
+    private final String txt;
     private ScaleGestureDetector gestureScale;
     private float scaleFactor = 1;
     private boolean inScale;
-    private int initialX;
-    private int initialY;
-    private float initialTouchX;
-    private float initialTouchY;
-    private float mPosX = 350;
-    private float mPosY = 0;
+    private float mPosX;
+    private float mPosY;
     private float mLastTouchX;
     private float mLastTouchY;
     // The ‘active pointer’ is the one currently moving our object.
     private int mActivePointerId = INVALID_POINTER_ID;
     private boolean isInitialized;
-    private Canvas mCanvas;
     private float maxLeft, maxRight, maxTop, maxBottom;
     private float heightOfText, widthOfText;
     private Paint paint;
     private Rect rect;
     private Rect parentRect;
+    private Canvas mCanvas;
+    private Context mContext;
 
     public DemoView(Context context, RelativeLayout relativeLayout) {
         super(context);
         gestureScale = new ScaleGestureDetector(context, this);
+        txt = getContext().getString(R.string.txt_graphics_rotation);
+        mPosX = relativeLayout.getX();
+        mPosY = relativeLayout.getY();
+        mContext = context;
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        mCanvas = canvas;
+        canvas.scale(scaleFactor, scaleFactor);
+        // mCanvas = canvas;
         parentRect = new Rect();
-        mCanvas.getClipBounds(parentRect);
+
+        canvas.getClipBounds(parentRect);
         maxLeft = parentRect.left;
         maxTop = parentRect.top;
         maxRight = parentRect.right;
@@ -65,37 +67,21 @@ public class DemoView extends View implements ScaleGestureDetector.OnScaleGestur
         // make the entire canvas white
         paint.setColor(Color.GRAY);
         canvas.drawPaint(paint);
+        canvas.save();
 
-        String txt = getContext().getString(R.string.txt_graphics_rotation);
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(Color.BLACK);
-        paint.setTextSize(50);
+        paint.setTextSize(50 * scaleFactor);
         paint.setTextAlign(Paint.Align.CENTER);
-
-        canvas.save();
-        canvas.translate(mPosX, mPosY);
-        canvas.scale(scaleFactor, scaleFactor);
-
-        rect = new Rect();
-        paint.getTextBounds(txt, 0, txt.length(), rect);
-        paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_OVER));
-
-        Log.e(TAG, "onDraw: rect : " + rect.left + " : " + rect.top + " : " + rect.right + " : " + rect.bottom);
-        Paint paint1 = new Paint();
-        paint1.setColor(Color.BLUE);
-        paint1.setStrokeWidth(5);
-        paint1.setStyle(Paint.Style.STROKE);
-//        canvas.drawRect(rect, paint1);
-        canvas.save();
 
         TextPaint textPaint = new TextPaint();
         textPaint.set(paint);
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
             StaticLayout staticLayout = StaticLayout.Builder
-                    .obtain(txt, 0, txt.length(), textPaint, parentRect.width())
+                    .obtain(txt, 0, txt.length(), textPaint, (int) maxRight)
                     .setBreakStrategy(Layout.BREAK_STRATEGY_BALANCED)
-                    .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                    .setAlignment(Layout.Alignment.ALIGN_CENTER)
                     .setIncludePad(true)
                     .build();
             if (staticLayout.getLineCount() == 1) {
@@ -105,17 +91,22 @@ public class DemoView extends View implements ScaleGestureDetector.OnScaleGestur
                 widthOfText = staticLayout.getWidth();
                 heightOfText = (staticLayout.getHeight());
             }
-          //  float textHeight = getTextHeight(txt, textPaint);
-            int numberOfTextLines = staticLayout.getLineCount();
-            float textYCoordinate = rect.exactCenterY() -
-                    ((numberOfTextLines * heightOfText) / 2);
+            rect = new Rect();
+            rect.set(0, 0, (int) widthOfText, (int) heightOfText);
 
-            //text will be drawn from left
-            float textXCoordinate = rect.left;
-            canvas.translate(0, heightOfText);
+            Paint paint1 = new Paint();
+            paint1.setColor(Color.BLUE);
+            paint1.setStrokeWidth(5);
+            paint1.setStyle(Paint.Style.STROKE);
+
+            canvas.translate(mPosX + (55 * scaleFactor), mPosY);
             staticLayout.draw(canvas);
-            canvas.drawRect(maxLeft, maxTop, widthOfText, heightOfText, paint1);
             canvas.restore();
+            canvas.save();
+            canvas.translate(mPosX, mPosY);
+            canvas.drawRect(rect, paint1);
+            canvas.restore();
+            canvas.save();
         } else {
             canvas.drawText(txt, rect.left, rect.top / 2, paint);
             widthOfText = paint.measureText(txt) / 2;
@@ -160,9 +151,8 @@ public class DemoView extends View implements ScaleGestureDetector.OnScaleGestur
             bounds[3] = bounds[1] + rect.bottom;
             if (bounds[3] > maxBottom) {
                 bounds[3] = maxBottom;
-                bounds[1] = bounds[3] - heightOfText;
+                bounds[1] = bounds[3] - rect.bottom;
             }
-
 
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN: {
@@ -178,20 +168,19 @@ public class DemoView extends View implements ScaleGestureDetector.OnScaleGestur
 
                 case MotionEvent.ACTION_MOVE:
                     // Only move if the ScaleGestureDetector isn't processing a gesture.
-                    if (!gestureScale.isInProgress()) {
-                        try {
-                            final int pointerIndex = event.findPointerIndex(mActivePointerId);
-                            final float x = event.getX(pointerIndex);
-                            final float y = event.getY(pointerIndex);
+//                    if (!gestureScale.isInProgress()) {
+//                        try {
+//                            final int pointerIndex = event.findPointerIndex(mActivePointerId);
+//                            final float x = event.getX(pointerIndex);
+//                            final float y = event.getY(pointerIndex);
 
-                            mPosX = bounds[0];
-                            mPosY = bounds[1];
-                            invalidate();
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-
-                    }
+                    mPosX = bounds[0];
+                    mPosY = bounds[1];
+                    invalidate();
+//                        } catch (Exception e) {
+//                            e.printStackTrace();
+//                        }
+//                    }
                     break;
                 case MotionEvent.ACTION_UP:
                     mActivePointerId = INVALID_POINTER_ID;
@@ -226,7 +215,10 @@ public class DemoView extends View implements ScaleGestureDetector.OnScaleGestur
         scaleFactor *= detector.getScaleFactor();
         scaleFactor = (scaleFactor < 1 ? 1 : scaleFactor); // prevent our view from becoming too small //
         scaleFactor = ((float) ((int) (scaleFactor * 100))) / 100; // Change precision to help with jitter when user just rests their fingers //
-        paint.setTextSize(scaleFactor);
+//        paint.setTextSize(scaleFactor);
+//        mPosX = detector.getFocusX();
+//        mPosY = detector.getFocusY();
+
         invalidate();
 //        this.setScaleX(scaleFactor);
 //        this.setScaleY(scaleFactor);
